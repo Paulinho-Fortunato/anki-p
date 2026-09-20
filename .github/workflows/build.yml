@@ -8,8 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true # Força comportamento estável com Node 20
-    
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Usa Node 20 explicitamente para evitar depreciação e erros de compatibilidade
+          node-version: '20'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -29,36 +29,26 @@ jobs:
       - name: Run Tests
         run: npm test
 
-      # Instalação explícita do EAS CLI (já funcionou nos logs anteriores)
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      # Autenticação manual usando o token dos secrets
-      - name: Login to Expo
-        run: eas login --non-interactive
+      - name: Verify Expo authentication
+        run: eas whoami
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
-          # Nota: Se usar EXPO_TOKEN funcionar melhor, troque a variável acima e o secret no GitHub
 
-      # Build Android
       - name: Build Android
         run: eas build --platform android --profile preview --non-interactive --no-wait
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
 
-      # Opcional: Build iOS (requer conta Apple configurada no EAS)
-      # - name: Build iOS
-      #   run: eas build --platform ios --profile preview --non-interactive --no-wait
-      #   env:
-      #     EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
-
       - name: Build Summary
         run: |
-          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Build iniciado com sucesso!" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Data**: $(date)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 Acompanhe o status do build em: [EAS Build Console](https://expo.dev/accounts/[seu-account]/projects/[seu-projeto]/builds)" >> $GITHUB_STEP_SUMMARY
-          echo "_Nota: O build roda em background (--no-wait). Verifique o console do EAS para baixar o APK quando pronto._" >> $GITHUB_STEP_SUMMARY
+          echo "## 📱 Build Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Build iniciado com sucesso!" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch**: ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit**: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Data**: $(date)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "🔗 Acompanhe o status do build no EAS Build Console." >> "$GITHUB_STEP_SUMMARY"
+          echo "_Nota: o build roda em background (--no-wait). Verifique o console do EAS para acompanhar o APK quando estiver pronto._" >> "$GITHUB_STEP_SUMMARY"
