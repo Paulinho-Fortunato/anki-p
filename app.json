@@ -2,6 +2,7 @@
   "expo": {
     "name": "Study Mobile App",
     "slug": "study-mobile-app",
+    "owner": "paulinho_dev",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
