@@ -1,4 +1,5 @@
 name: Build
+
 on:
   push:
     branches: [main]
@@ -6,17 +7,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true # Força Node 20 conforme aviso
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20' # Usa LTS explícito
+          node-version: '20' # Usar Node 20 LTS para estabilidade
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
 
       - name: Type Check
@@ -25,28 +26,38 @@ jobs:
       - name: Run Tests
         run: npm test
 
-      # Instalação MANUAL do EAS CLI (evita o bug da action com yarn/skip)
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - uses: expo/expo-github-action@v8
+      - name: Setup Expo and EAS Auth
+        uses: expo/expo-github-action@v8
         with:
-          # Não pedimos para a action instalar o expo-cli ou eas-cli
-          expo-version: skip 
+          # Não pedimos para a ação instalar nada, apenas configurar o auth
+          expo-version: skip
           eas-version: skip
           token: ${{ secrets.EAS_ACCESS_TOKEN }}
 
       - name: Build Android (Preview)
         run: eas build --platform android --profile preview --non-interactive
         env:
-          EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
+          EXPO_CI: 'true'
 
-      # Opcional: Upload do APK como artefato se o build gerar localmente 
-      # (Nota: EAS Build geralmente gera na nuvem e retorna URL, não arquivo local)
-      - name: Print Build Summary
+      - name: Upload Artifact (Android)
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: android-apk
+          path: '*.apk'
+          retention-days: 14
+
+      - name: Post Build Summary
+        if: always()
         run: |
-          echo "✅ Build iniciado com sucesso!" >> $GITHUB_STEP_SUMMARY
-          echo "Verifique o dashboard da Expo para download do APK." >> $GITHUB_STEP_SUMMARY
-          echo "✅ Build concluído com sucesso!" >> $GITHUB_STEP_SUMMARY
-          echo "🤖 Android: APK disponível nos artifacts acima" >> $GITHUB_STEP_SUMMARY
-          echo "⏳ iOS: Requer configuração adicional de certificados (ver README)" >> $GITHUB_STEP_SUMMARY
+          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Node: 20" >> $GITHUB_STEP_SUMMARY
+          if [ -f "*.apk" ]; then
+            echo "- APK: Gerado com sucesso (verifique os artifacts)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- APK: Não encontrado (pode ter falhado ou movido)" >> $GITHUB_STEP_SUMMARY
+          fi
