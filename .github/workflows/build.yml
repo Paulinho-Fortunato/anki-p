@@ -2,7 +2,8 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -17,19 +18,17 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: Verify dependencies
-        run: |
-          test -f package-lock.json
-          npm ls query-string expo-asset
+      - name: Check Expo dependencies
+        run: npx expo-doctor
 
-      - name: Type Check
+      - name: Type check
         run: npx tsc --noEmit
 
-      - name: Run Tests
-        run: npm test
+      - name: Run tests
+        run: npm test -- --runInBand
 
       - name: Install EAS CLI
         run: npm install --global eas-cli
@@ -55,7 +54,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
 
-      - name: Show build result
+      - name: Show EAS build result
         run: cat eas-build.json
 
       - name: Download APK
@@ -66,24 +65,22 @@ jobs:
           apk_url="$(jq -r '
             if type == "array" then .[] else . end
             | .artifacts.buildUrl
-              // .artifacts.applicationArchiveUrl
-              // .artifactUrl
-              // empty
+            // .artifacts.applicationArchiveUrl
+            // .artifactUrl
+            // empty
           ' eas-build.json | head -n 1)"
 
           if [ -z "$apk_url" ] || [ "$apk_url" = "null" ]; then
-            echo "URL do APK não encontrada."
+            echo "Não foi possível encontrar a URL do APK."
             cat eas-build.json
             exit 1
           fi
 
           echo "Baixando APK..."
-          curl --fail --location --retry 3 "$apk_url" \
-            --output app-preview.apk
-
+          curl --fail --location --retry 3 "$apk_url" --output app-preview.apk
           test -s app-preview.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: anki-p-preview-apk
@@ -91,8 +88,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build Summary
+      - name: Build summary
         run: |
-          echo "## 📱 APK gerado" >> "$GITHUB_STEP_SUMMARY"
+          echo "## APK gerado" >> "$GITHUB_STEP_SUMMARY"
           echo "O APK foi gerado e está disponível nos artefatos desta execução." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Artefato: anki-p-preview-apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artefato: anki-p-preview-apk" >> "$GITHUB_STEP_SUMMARY"
