@@ -42,18 +42,50 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
 
-      - name: Build Android
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+      - name: Build Android APK
+        run: |
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --wait \
+            --json > eas-build.json
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
+
+      - name: Download APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          apk_url="$(jq -r '
+            if type == "array" then .[] else . end
+            | .artifacts.buildUrl // .artifacts.applicationArchiveUrl // .artifactUrl // empty
+          ' eas-build.json | head -n 1)"
+
+          if [[ -z "$apk_url" || "$apk_url" == "null" ]]; then
+            echo "Não foi possível encontrar a URL do APK na resposta do EAS:"
+            cat eas-build.json
+            exit 1
+          fi
+
+          echo "APK: $apk_url"
+          curl --fail --location --retry 3 "$apk_url" --output app-preview.apk
+          test -s app-preview.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anki-p-preview-apk
+          path: app-preview.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build Summary
         run: |
           echo "## 📱 Build Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "✅ Build iniciado com sucesso!" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ APK gerado e anexado como artefato da execução." >> "$GITHUB_STEP_SUMMARY"
           echo "- **Branch**: ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Commit**: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Artefato**: anki-p-preview-apk" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Data**: $(date)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "🔗 Acompanhe o status do build no EAS Build Console." >> "$GITHUB_STEP_SUMMARY"
-          echo "_Nota: o build roda em background (--no-wait). Verifique o console do EAS para acompanhar o APK quando estiver pronto._" >> "$GITHUB_STEP_SUMMARY"
