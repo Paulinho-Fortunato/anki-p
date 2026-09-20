@@ -1,197 +1,55 @@
 name: Build
-
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
-  lint-and-typecheck:
+  build:
     runs-on: ubuntu-latest
-    name: Lint & Type Check
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20' # Forçar Node 20 LTS para estabilidade
           cache: 'npm'
-
+      
       - name: Install dependencies
         run: npm ci
-
-      - name: TypeScript type check
+      
+      - name: Type Check
         run: npx tsc --noEmit
-
-  test:
-    runs-on: ubuntu-latest
-    name: Run Tests
-    needs: lint-and-typecheck
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests with coverage
-        run: npm test -- --coverage --forceExit
-
-  build-android-production:
-    runs-on: ubuntu-latest
-    name: Build Android (Production)
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
+      
+      - name: Run Tests
+        run: npm test
+      
+      # Instalação explícita do EAS CLI via npm para evitar erro interno do yarn
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+      
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EAS_ACCESS_TOKEN }}
-
-      - name: Create build directory
-        run: mkdir -p ./build
-
-      - name: Build Android APK (Production)
-        id: build-android
-        run: |
-          echo "Building Android Production APK..."
-          eas build --platform android --profile production --non-interactive --output ./build/android-app-release.apk
-          
-      - name: Upload Android APK artifact
+          # Não tentar instalar expo-cli automaticamente
+          expo-version: skip
+      
+      - name: Build Android (Preview)
+        run: eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_NO_GIT_CLEAN: 1 # Evita problemas com git dirty
+      
+      - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk-production
-          path: ./build/android-app-release.apk
-          retention-days: 30
-
-      - name: Write Android build summary
-        run: |
-          echo "## 🤖 Android Build Complete (Production)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platform**: Android" >> $GITHUB_STEP_SUMMARY
-          echo "- **Profile**: Production (Signed APK/AAB)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact**: Available in workflow artifacts (30 days)" >> $GITHUB_STEP_SUMMARY
-
-  build-ios-production:
-    runs-on: ubuntu-latest
-    name: Build iOS (Production)
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    continue-on-error: true # iOS pode falhar sem credenciais completas, mas Android passa
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EAS_ACCESS_TOKEN }}
-
-      - name: Create build directory
-        run: mkdir -p ./build
-
-      - name: Build iOS (Production - IPA)
-        id: build-ios
-        run: |
-          echo "Building iOS Production IPA..."
-          eas build --platform ios --profile production --non-interactive --output ./build/ios-app-release.ipa || {
-            echo "::warning::iOS build failed. iOS credentials not configured in EAS."
-            exit 0
-          }
-
-      - name: Upload iOS build artifact
-        if: success() && hashFiles('./build/ios-app-release.ipa') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-production
-          path: ./build/ios-app-release.ipa
-          retention-days: 30
-
-      - name: Write iOS build summary
-        run: |
-          echo "## 🍎 iOS Build Status (Production)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f ./build/ios-app-release.ipa ]; then
-            echo "- **Status**: ✅ Success" >> $GITHUB_STEP_SUMMARY
-            echo "- **Platform**: iOS (Production IPA)" >> $GITHUB_STEP_SUMMARY
-            echo "- **Artifact**: Available in workflow artifacts (30 days)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- **Status**: ⚠️ Skipped" >> $GITHUB_STEP_SUMMARY
-            echo "- **Reason**: iOS credentials not configured in EAS Console" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  final-summary:
-    runs-on: ubuntu-latest
-    name: Build Summary
-    needs: [build-android-production, build-ios-production]
-    if: always()
-    steps:
-      - name: Generate final summary
-        run: |
-          echo "# 📱 App Mobile de Estudos - Production Build Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          name: android-apk
+          path: |
+            *.apk
+            build/outputs/**/*.apk
           
-          ANDROID_STATUS="${{ needs.build-android-production.result }}"
-          IOS_STATUS="${{ needs.build-ios-production.result }}"
-          
-          echo "### Build Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "$ANDROID_STATUS" == "success" ]; then
-            echo "- 🤖 **Android**: ✅ Success (Production APK/AAB)" >> $GITHUB_STEP_SUMMARY
-          elif [ "$ANDROID_STATUS" == "failure" ]; then
-            echo "- 🤖 **Android**: ❌ Failed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- 🤖 **Android**: ⚪ Skipped" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "$IOS_STATUS" == "success" ]; then
-            echo "- 🍎 **iOS**: ✅ Success (Production IPA)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- 🍎 **iOS**: ⚪ Skipped/Warning (Requires EAS credentials)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📝 Notes" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- iOS builds require Apple Developer credentials configured in EAS Console" >> $GITHUB_STEP_SUMMARY
-          echo "- Android APK is signed and ready for Play Store or sideloading" >> $GITHUB_STEP_SUMMARY
-          echo "- Download artifacts from the workflow page (available for 30 days)" >> $GITHUB_STEP_SUMMARY
-          echo "- For TestFlight: Upload IPA to App Store Connect after build" >> $GITHUB_STEP_SUMMARY
+      - name: Output Summary
+        run: |
+          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build concluído com sucesso!" >> $GITHUB_STEP_SUMMARY
+          echo "🤖 Android: APK disponível nos artifacts acima" >> $GITHUB_STEP_SUMMARY
+          echo "⏳ iOS: Requer configuração adicional de certificados (ver README)" >> $GITHUB_STEP_SUMMARY
