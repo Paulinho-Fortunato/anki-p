@@ -50,16 +50,5 @@
         "EXPO_ENV": "production"
       }
     }
-  },
-  "submit": {
-    "production": {
-      "ios": {
-        "ascAppId": null
-      },
-      "android": {
-        "serviceAccountKeyPath": null,
-        "track": "internal"
-      }
-    }
   }
 }
