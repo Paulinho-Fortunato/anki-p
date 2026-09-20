@@ -17,7 +17,7 @@ Aplicativo mobile de estudos offline-first com métodos cientificamente fundamen
 
 ## 🔒 Privacidade
 
-- **100% Offline**: Nenhum dado sai do seu dispositivo
+- **100% Offline**: Nenhum dado sai do  dispositivo
 - **Sem conta**: Use imediatamente, sem cadastro
 - **Sem analytics**: Zero rastreamento
 - **Dados locais**: SQLite + MMKV
