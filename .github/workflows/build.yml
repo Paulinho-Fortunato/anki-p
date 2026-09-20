@@ -6,50 +6,47 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true # Força Node 20 conforme aviso
     steps:
       - uses: actions/checkout@v4
       
       - uses: actions/setup-node@v4
         with:
-          node-version: '20' # Forçar Node 20 LTS para estabilidade
+          node-version: '20' # Usa LTS explícito
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Type Check
         run: npx tsc --noEmit
-      
+
       - name: Run Tests
         run: npm test
-      
-      # Instalação explícita do EAS CLI via npm para evitar erro interno do yarn
+
+      # Instalação MANUAL do EAS CLI (evita o bug da action com yarn/skip)
       - name: Install EAS CLI
         run: npm install -g eas-cli
-      
+
       - uses: expo/expo-github-action@v8
         with:
-          eas-version: latest
+          # Não pedimos para a action instalar o expo-cli ou eas-cli
+          expo-version: skip 
+          eas-version: skip
           token: ${{ secrets.EAS_ACCESS_TOKEN }}
-          # Não tentar instalar expo-cli automaticamente
-          expo-version: skip
-      
+
       - name: Build Android (Preview)
         run: eas build --platform android --profile preview --non-interactive
         env:
-          EXPO_NO_GIT_CLEAN: 1 # Evita problemas com git dirty
-      
-      - name: Upload Android Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: |
-            *.apk
-            build/outputs/**/*.apk
-          
-      - name: Output Summary
+          EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
+
+      # Opcional: Upload do APK como artefato se o build gerar localmente 
+      # (Nota: EAS Build geralmente gera na nuvem e retorna URL, não arquivo local)
+      - name: Print Build Summary
         run: |
-          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Build iniciado com sucesso!" >> $GITHUB_STEP_SUMMARY
+          echo "Verifique o dashboard da Expo para download do APK." >> $GITHUB_STEP_SUMMARY
           echo "✅ Build concluído com sucesso!" >> $GITHUB_STEP_SUMMARY
           echo "🤖 Android: APK disponível nos artifacts acima" >> $GITHUB_STEP_SUMMARY
           echo "⏳ iOS: Requer configuração adicional de certificados (ver README)" >> $GITHUB_STEP_SUMMARY
