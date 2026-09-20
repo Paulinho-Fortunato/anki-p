@@ -1,4 +1,9 @@
 // Jest setup file
+
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
+}));
+
 jest.mock('react-native-mmkv', () => {
   return {
     MMKV: jest.fn().mockImplementation(() => ({
