@@ -37,6 +37,11 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
 
+      - name: Link Expo project
+        run: eas init --account paulinho_dev --non-interactive --force
+        env:
+          EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
+
       - name: Build Android
         run: eas build --platform android --profile preview --non-interactive --no-wait
         env:
