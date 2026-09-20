@@ -7,8 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
       - name: Checkout
@@ -17,11 +15,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm install
+
+      - name: Verify dependencies
+        run: |
+          test -f package-lock.json
+          npm ls query-string expo-asset
 
       - name: Type Check
         run: npx tsc --noEmit
@@ -30,7 +32,7 @@ jobs:
         run: npm test
 
       - name: Install EAS CLI
-        run: npm install -g eas-cli
+        run: npm install --global eas-cli
 
       - name: Verify Expo authentication
         run: eas whoami
@@ -53,6 +55,9 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EAS_ACCESS_TOKEN }}
 
+      - name: Show build result
+        run: cat eas-build.json
+
       - name: Download APK
         shell: bash
         run: |
@@ -60,17 +65,22 @@ jobs:
 
           apk_url="$(jq -r '
             if type == "array" then .[] else . end
-            | .artifacts.buildUrl // .artifacts.applicationArchiveUrl // .artifactUrl // empty
+            | .artifacts.buildUrl
+              // .artifacts.applicationArchiveUrl
+              // .artifactUrl
+              // empty
           ' eas-build.json | head -n 1)"
 
-          if [[ -z "$apk_url" || "$apk_url" == "null" ]]; then
-            echo "Não foi possível encontrar a URL do APK na resposta do EAS:"
+          if [ -z "$apk_url" ] || [ "$apk_url" = "null" ]; then
+            echo "URL do APK não encontrada."
             cat eas-build.json
             exit 1
           fi
 
-          echo "APK: $apk_url"
-          curl --fail --location --retry 3 "$apk_url" --output app-preview.apk
+          echo "Baixando APK..."
+          curl --fail --location --retry 3 "$apk_url" \
+            --output app-preview.apk
+
           test -s app-preview.apk
 
       - name: Upload APK artifact
@@ -83,9 +93,6 @@ jobs:
 
       - name: Build Summary
         run: |
-          echo "## 📱 Build Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "✅ APK gerado e anexado como artefato da execução." >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Branch**: ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Commit**: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Artefato**: anki-p-preview-apk" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Data**: $(date)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## 📱 APK gerado" >> "$GITHUB_STEP_SUMMARY"
+          echo "O APK foi gerado e está disponível nos artefatos desta execução." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artefato: anki-p-preview-apk" >> "$GITHUB_STEP_SUMMARY"
