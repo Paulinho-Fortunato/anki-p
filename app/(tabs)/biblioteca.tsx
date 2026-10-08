@@ -5,7 +5,7 @@ import { typography, spacing, borderRadius, shadows } from '@theme/tokens';
 import { Card, EmptyState, Button } from '@components';
 import { SubjectRepository, TopicRepository, ConceptRepository } from '@db/repositories';
 import { Plus, Search, ChevronRight, Folder, BookOpen } from 'lucide-react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 
 export default function BibliotecaScreen() {
   const { colors } = useTheme();
@@ -69,7 +69,7 @@ export default function BibliotecaScreen() {
           title="Nenhuma disciplina"
           description="Comece por adicionar uma disciplina para organizar os seus estudos."
           actionLabel="Adicionar disciplina"
-          onAction={() => {}}
+          onAction={() => router.push('/modal/subject')}
         />
       ) : (
         <View style={styles.content}>

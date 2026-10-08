@@ -55,8 +55,11 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadStats();
-    setRefreshing(false);
+    try {
+      await loadStats();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -133,7 +136,7 @@ export default function HomeScreen() {
           </View>
           <Button 
             title="Revisar agora" 
-            onPress={() => {}} 
+            onPress={() => router.push('/revisoes')}
             variant="primary"
             size="small"
           />
@@ -147,16 +150,14 @@ export default function HomeScreen() {
           icon={BookOpen}
           title="Nenhuma atividade planejada"
           description="Adicione disciplinas e conceitos para começar a organizar seus estudos"
-          action={
-            <Button title="Adicionar disciplina" onPress={() => {}} variant="secondary" />
-          }
+          action={<Button title="Adicionar disciplina" onPress={() => router.push('/modal/subject')} variant="secondary" />}
         />
       </Card>
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Button title="Novo Conceito" onPress={() => {}} variant="primary" style={styles.quickAction} />
-        <Button title="Timer" onPress={() => {}} variant="secondary" style={styles.quickAction} />
+        <Button title="Novo Conceito" onPress={() => router.push('/biblioteca')} variant="primary" style={styles.quickAction} />
+        <Button title="Timer" onPress={() => router.push('/estudar')} variant="secondary" style={styles.quickAction} />
       </View>
     </ScrollView>
   );

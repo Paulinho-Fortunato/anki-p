@@ -190,7 +190,7 @@ class BackupServiceClass {
         // Import study sessions
         for (const session of data.studySessions) {
           db.runSync(
-            'INSERT INTO study_sessions (id, subject_id, topic_id, start_time, end_time, duration_seconds, focus_score, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO study_sessions (id, subject_id, topic_id, start_time, end_time, duration_seconds, focus_score, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [session.id, session.subject_id, session.topic_id, session.start_time, session.end_time, session.duration_seconds, session.focus_score, session.notes, session.created_at]
           );
         }
@@ -198,7 +198,7 @@ class BackupServiceClass {
         // Import reviews
         for (const review of data.reviews) {
           db.runSync(
-            'INSERT INTO reviews (id, concept_id, flashcard_id, rating, interval_days, ease_factor, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO reviews (id, concept_id, flashcard_id, rating, interval_days, ease_factor, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [review.id, review.concept_id, review.flashcard_id, review.rating, review.interval_days, review.ease_factor, review.reviewed_at]
           );
         }
@@ -206,7 +206,7 @@ class BackupServiceClass {
         // Import feynman notes
         for (const note of data.feynmanNotes) {
           db.runSync(
-            'INSERT INTO feynman_notes (id, concept_id, version, explanation, gaps_identified, simplified_explanation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO feynman_notes (id, concept_id, version, explanation, gaps_identified, simplified_explanation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [note.id, note.concept_id, note.version, note.explanation, note.gaps_identified, note.simplified_explanation, note.created_at]
           );
         }
@@ -214,7 +214,7 @@ class BackupServiceClass {
         // Import connections
         for (const connection of data.connections) {
           db.runSync(
-            'INSERT INTO connections (id, concept_id, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
+            'INSERT OR IGNORE INTO connections (id, concept_id, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
             [connection.id, connection.concept_id, connection.type, connection.content, connection.created_at]
           );
         }
@@ -268,6 +268,12 @@ class BackupServiceClass {
       Array.isArray(data.subjects) &&
       Array.isArray(data.topics) &&
       Array.isArray(data.concepts) &&
+      Array.isArray(data.flashcards) &&
+      Array.isArray(data.studySessions) &&
+      Array.isArray(data.reviews) &&
+      Array.isArray(data.feynmanNotes) &&
+      Array.isArray(data.connections) &&
+      Array.isArray(data.reminders) &&
       typeof data.exportedAt === 'string'
     );
   }

@@ -21,10 +21,6 @@
     "android": {
       "package": "com.study.mobileapp"
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static"
-    },
     "plugins": [
       "expo-router",
       "expo-font",

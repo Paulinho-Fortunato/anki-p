@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ViewStyle } from 'react-native';
+import { router } from 'expo-router';
 import { useTheme } from '@theme/ThemeProvider';
 import { typography, spacing } from '@theme/tokens';
 import { BookOpen } from 'lucide-react-native';
@@ -30,7 +31,7 @@ export default function EstudarScreen() {
           title="Comece a estudar"
           description="Adicione conceitos e matérias para iniciar suas sessões de estudo ativo"
           action={
-            <Button title="Adicionar Disciplina" onPress={() => {}} variant="primary" />
+            <Button title="Adicionar Disciplina" onPress={() => router.push('/modal/subject')} variant="primary" />
           }
         />
       </View>

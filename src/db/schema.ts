@@ -12,6 +12,9 @@ let db: SQLite.SQLiteDatabase | null = null;
 export function getDatabase(): SQLite.SQLiteDatabase {
   if (!db) {
     db = SQLite.openDatabaseSync(DB_NAME);
+    // Enforce all declared foreign keys for every connection. Without this,
+    // ON DELETE CASCADE/SET NULL silently does nothing on SQLite.
+    db.execSync('PRAGMA foreign_keys = ON;');
   }
   return db;
 }
@@ -225,10 +228,18 @@ export function runMigrations(): void {
     return; // Already up to date
   }
   
-  // Run pending migrations
-  if (currentVersion < 1) {
-    database.execSync(migration1());
-    recordMigration(database, 1);
+  // Run pending migrations atomically so a failed migration cannot leave a
+  // partially-created schema or an incorrect migration version.
+  database.execSync('BEGIN TRANSACTION');
+  try {
+    if (currentVersion < 1) {
+      database.execSync(migration1());
+      recordMigration(database, 1);
+    }
+    database.execSync('COMMIT');
+  } catch (error) {
+    database.execSync('ROLLBACK');
+    throw error;
   }
   
   // Add more migrations here as needed in the future
