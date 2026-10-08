@@ -12,7 +12,7 @@ export default function ConceitosScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   
-  const [concepts, setConcepts] = useState(ConceptRepository.getAll(topicId));
+  const [concepts, setConcepts] = useState<ReturnType<typeof ConceptRepository.getAll>>([]);
 
   useEffect(() => {
     refreshData();

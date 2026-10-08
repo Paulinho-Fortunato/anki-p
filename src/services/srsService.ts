@@ -5,6 +5,8 @@
  */
 
 import { ConceptRepository, FlashcardRepository, ReviewRepository } from '../db/repositories';
+import { getDatabase } from '../db/schema';
+import { isoToLocalDateStr } from '@utils/date';
 import { getSRSSettings, DEFAULT_SRS_SETTINGS, type SRSSettings, type SRSIntervals } from '../store/settingsStore';
 
 // Rating scale (1-4)
@@ -65,11 +67,18 @@ export function calculateNextInterval(
 
   // Calculate new interval based on user settings
   if (rating === RATING.FORGOT) {
-    // Use configured interval for "forgot" (usually 0 or 1 day), minimum 1
-    newInterval = Math.max(1, activeConfig.intervals.forgot);
+    // Forgot: reset to the configured "forgot" interval (usually same-day/1).
+    // Do NOT grow from the previous interval - memory lapsed, start over.
+    newInterval = Math.max(0, activeConfig.intervals.forgot);
   } else if (rating === RATING.PARTIAL) {
-    // Use configured interval for "partial"
-    newInterval = activeConfig.intervals.partial;
+    // Partial recall: don't grow; fall back to the configured "partial"
+    // interval (or half of the current one, whichever keeps progress without
+    // over-promising a card the user only half-remembered).
+    if (currentInterval > activeConfig.intervals.partial) {
+      newInterval = Math.max(activeConfig.intervals.partial, Math.floor(currentInterval / 2));
+    } else {
+      newInterval = activeConfig.intervals.partial;
+    }
   } else if (rating === RATING.REMEMBERED) {
     // Use configured base interval or grow by ease factor
     if (currentInterval < activeConfig.intervals.remembered) {
@@ -107,6 +116,17 @@ export function getNextReviewDate(intervalDays: number): string {
 }
 
 /**
+ * Derive the SM-2 ease factor from the stored difficulty value.
+ * The schema stores difficulty as 1/ease (0.5 default => ease 2.0, matching
+ * SM-2's initial EF). Falls back to 2.5 for legacy/unset rows.
+ */
+export function easeFromDifficulty(difficulty: number): number {
+  if (!difficulty || difficulty <= 0) return 2.5;
+  const ef = 1 / difficulty;
+  return Math.min(3.0, Math.max(1.3, ef));
+}
+
+/**
  * Process a review submission for a concept
  */
 export function processConceptReview(
@@ -118,14 +138,24 @@ export function processConceptReview(
     throw new Error('Concept not found');
   }
 
+  // The "current interval" is the one that was actually scheduled and just
+  // elapsed: derived from the previous review date up to the due date
+  // (next_review_at), NOT from how late the user happened to be. Being late
+  // must not inflate the next interval.
   const currentInterval = concept.next_review_at
-    ? Math.floor((new Date().getTime() - new Date(concept.next_review_at).getTime()) / (1000 * 60 * 60 * 24))
+    ? (() => {
+        const dueMs = new Date(concept.next_review_at).getTime();
+        const lastMs = concept.last_reviewed_at
+          ? new Date(concept.last_reviewed_at).getTime()
+          : dueMs - 24 * 60 * 60 * 1000; // first scheduled review: treat as ~1 day
+        return Math.max(0, Math.round((dueMs - lastMs) / (1000 * 60 * 60 * 24)));
+      })()
     : 0;
 
-  const easeFactor = concept.difficulty > 0 ? 2.5 + (concept.difficulty - 0.5) * 0.5 : 2.5;
+  const easeFactor = easeFromDifficulty(concept.difficulty);
 
   const { interval, easeFactor: newEaseFactor } = calculateNextInterval(
-    Math.max(1, currentInterval),
+    currentInterval,
     easeFactor,
     rating
   );
@@ -166,13 +196,19 @@ export function processFlashcardReview(
   }
 
   const currentInterval = flashcard.next_review_at
-    ? Math.floor((new Date().getTime() - new Date(flashcard.next_review_at).getTime()) / (1000 * 60 * 60 * 24))
+    ? (() => {
+        const dueMs = new Date(flashcard.next_review_at).getTime();
+        const lastMs = flashcard.last_reviewed_at
+          ? new Date(flashcard.last_reviewed_at).getTime()
+          : dueMs - 24 * 60 * 60 * 1000; // first scheduled review: treat as ~1 day
+        return Math.max(0, Math.round((dueMs - lastMs) / (1000 * 60 * 60 * 24)));
+      })()
     : 0;
 
-  const easeFactor = flashcard.difficulty > 0 ? 2.5 + (flashcard.difficulty - 0.5) * 0.5 : 2.5;
+  const easeFactor = easeFromDifficulty(flashcard.difficulty);
 
   const { interval, easeFactor: newEaseFactor } = calculateNextInterval(
-    Math.max(1, currentInterval),
+    currentInterval,
     easeFactor,
     rating
   );
@@ -203,7 +239,7 @@ export function processFlashcardReview(
  * Get concepts due for review
  */
 export function getDueConcepts(limit?: number): any[] {
-  const db = require('@db/schema').getDatabase();
+  const db = getDatabase();
   const now = new Date().toISOString();
   
   let query = `
@@ -211,19 +247,21 @@ export function getDueConcepts(limit?: number): any[] {
     WHERE c.next_review_at IS NULL OR c.next_review_at <= ?
     ORDER BY c.next_review_at ASC, c.created_at ASC
   `;
+  const params: (string | number)[] = [now];
   
-  if (limit) {
-    query += ` LIMIT ${limit}`;
+  if (limit && Number.isFinite(limit) && limit > 0) {
+    query += ` LIMIT ?`;
+    params.push(Math.floor(limit));
   }
   
-  return db.getAllSync(query, [now]);
+  return db.getAllSync(query, params);
 }
 
 /**
  * Get flashcards due for review
  */
 export function getDueFlashcards(limit?: number): any[] {
-  const db = require('@db/schema').getDatabase();
+  const db = getDatabase();
   const now = new Date().toISOString();
   
   let query = `
@@ -231,12 +269,14 @@ export function getDueFlashcards(limit?: number): any[] {
     WHERE f.next_review_at IS NULL OR f.next_review_at <= ?
     ORDER BY f.next_review_at ASC, f.created_at ASC
   `;
+  const params: (string | number)[] = [now];
   
-  if (limit) {
-    query += ` LIMIT ${limit}`;
+  if (limit && Number.isFinite(limit) && limit > 0) {
+    query += ` LIMIT ?`;
+    params.push(Math.floor(limit));
   }
   
-  return db.getAllSync(query, [now]);
+  return db.getAllSync(query, params);
 }
 
 /**
@@ -247,7 +287,7 @@ export function getReviewStats(days: number = 7): {
   averageRating: number;
   reviewsByDay: Array<{ date: string; count: number }>;
 } {
-  const db = require('@db/schema').getDatabase();
+  const db = getDatabase();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
@@ -259,8 +299,11 @@ export function getReviewStats(days: number = 7): {
   const reviewsByDay: Record<string, number> = {};
   let totalRating = 0;
 
-  (reviews as Array<{ reviewed_at: string; rating: number }>).forEach((review: { reviewed_at: string; rating: number }) => {
-    const date = review.reviewed_at.split('T')[0];
+  reviews.forEach((review) => {
+    // Bucket by LOCAL calendar date so the "day" flips at local midnight,
+    // not at 03:00 BRT (UTC boundary).
+    const date = isoToLocalDateStr(review.reviewed_at);
+    if (!date) return;
     reviewsByDay[date] = (reviewsByDay[date] || 0) + 1;
     totalRating += review.rating;
   });

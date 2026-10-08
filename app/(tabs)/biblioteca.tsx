@@ -9,8 +9,12 @@ import { Link } from 'expo-router';
 
 export default function BibliotecaScreen() {
   const { colors } = useTheme();
-  const [subjects, setSubjects] = useState(SubjectRepository.getAll());
+  const [subjects, setSubjects] = useState<ReturnType<typeof SubjectRepository.getAll>>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   const refreshData = () => {
     setSubjects(SubjectRepository.getAll());

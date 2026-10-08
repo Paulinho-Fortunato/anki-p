@@ -11,9 +11,11 @@ import { SubjectRepository, StudySessionRepository } from '@db/repositories';
 
 export default function EstudarScreen() {
   const { colors } = useTheme();
-  const [subjects, setSubjects] = useState(SubjectRepository.getAll());
+  // DB queries run inside useEffect only - never during render, so the
+  // component can mount safely even before tables are guaranteed to exist.
+  const [subjects, setSubjects] = useState<ReturnType<typeof SubjectRepository.getAll>>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>();
-  const [todaySessions, setTodaySessions] = useState(StudySessionRepository.getTodayBySubject());
+  const [todaySessions, setTodaySessions] = useState<ReturnType<typeof StudySessionRepository.getTodayBySubject>>([]);
 
   useEffect(() => {
     setSubjects(SubjectRepository.getAll());
