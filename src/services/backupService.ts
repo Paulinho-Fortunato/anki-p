@@ -101,6 +101,12 @@ class BackupServiceClass {
 
       const db = getDatabase();
 
+      // Start a single transaction that covers BOTH the cleanup deletes and
+      // the import inserts. This way, if any insert fails, the ROLLBACK also
+      // restores the data that was deleted above (no permanent data loss).
+      db.execSync('BEGIN TRANSACTION');
+
+      try {
       // If not merging, clear existing data first
       if (!options?.merge) {
         // Clear in reverse dependency order
@@ -116,9 +122,6 @@ class BackupServiceClass {
       }
 
       // Import in dependency order
-      db.execSync('BEGIN TRANSACTION');
-
-      try {
         // Import subjects
         for (const subject of data.subjects) {
           const exists = db.getFirstSync('SELECT id FROM subjects WHERE id = ?', [subject.id]);

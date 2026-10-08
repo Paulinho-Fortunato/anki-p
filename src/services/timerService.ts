@@ -74,8 +74,15 @@ class TimerServiceClass {
     this.topicId = topicId;
   }
 
-  on(callbacks: TimerCallbacks): void {
+  on(callbacks: TimerCallbacks): () => void {
+    const previousCallbacks = this.callbacks;
     this.callbacks = { ...this.callbacks, ...callbacks };
+
+    // Return an unsubscribe function so screens can detach their listeners
+    // when they unmount (avoids stale callbacks and memory leaks).
+    return () => {
+      this.callbacks = previousCallbacks;
+    };
   }
 
   start(): void {

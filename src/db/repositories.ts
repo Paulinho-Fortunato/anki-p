@@ -384,11 +384,13 @@ export const FlashcardRepository = {
 export const StudySessionRepository = {
   getAll(limit?: number): StudySession[] {
     const db = getDatabase();
-    let query = 'SELECT * FROM study_sessions ORDER BY created_at DESC';
     if (limit) {
-      query += ` LIMIT ${limit}`;
+      return db.getAllSync<StudySession>(
+        'SELECT * FROM study_sessions ORDER BY created_at DESC LIMIT ?',
+        [limit]
+      );
     }
-    return db.getAllSync<StudySession>(query);
+    return db.getAllSync<StudySession>('SELECT * FROM study_sessions ORDER BY created_at DESC');
   },
 
   getById(id: string): StudySession | null {
@@ -612,9 +614,10 @@ export const ReviewRepository = {
     query += ' ORDER BY reviewed_at DESC';
     
     if (limit) {
-      query += ` LIMIT ${limit}`;
+      query += ' LIMIT ?';
+      params.push(limit);
     }
-    
+
     return db.getAllSync<Review>(query, params);
   },
 
