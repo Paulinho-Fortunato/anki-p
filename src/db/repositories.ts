@@ -5,6 +5,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from './schema';
+import { buildFtsQuery, extractSearchTokens, escapeLike, needsLikeFallback } from '../utils/fts';
+import { getTodayLocal, getLocalDateStr, localDateToUtcIsoStart } from '../utils/date';
 
 // ==================== Types ====================
 export interface Subject {
@@ -255,12 +257,43 @@ export const ConceptRepository = {
 
   search(query: string): Concept[] {
     const db = getDatabase();
+    const trimmed = query?.trim();
+    if (!trimmed) return [];
+
+    // Sanitize user input into a safe FTS5 MATCH expression (avoids
+    // "fts5: syntax error" on inputs like `C++` or `Lavoisier -`).
+    const ftsExpr = buildFtsQuery(trimmed);
+
+    if (ftsExpr && !needsLikeFallback(trimmed)) {
+      try {
+        return db.getAllSync<Concept>(
+          `SELECT c.* FROM concepts c
+           JOIN concepts_fts fts ON c.rowid = fts.rowid
+           WHERE concepts_fts MATCH ?
+           ORDER BY rank`,
+          [ftsExpr]
+        );
+      } catch {
+        // FTS failed unexpectedly - fall through to LIKE search.
+      }
+    }
+
+    // LIKE fallback: literal substring match per token (AND semantics).
+    const tokens = extractSearchTokens(trimmed);
+    if (tokens.length === 0) return [];
+
+    const conditions = tokens.map(() =>
+      `(c.title LIKE ? ESCAPE '\\' OR c.explanation LIKE ? ESCAPE '\\' OR c.question LIKE ? ESCAPE '\\' OR c.answer LIKE ? ESCAPE '\\' OR c.notes LIKE ? ESCAPE '\\')`
+    );
+    const params: string[] = [];
+    for (const token of tokens) {
+      const like = `%${escapeLike(token)}%`;
+      params.push(like, like, like, like, like);
+    }
+
     return db.getAllSync<Concept>(
-      `SELECT c.* FROM concepts c
-       JOIN concepts_fts fts ON c.rowid = fts.rowid
-       WHERE concepts_fts MATCH ?
-       ORDER BY rank`,
-      [query]
+      `SELECT c.* FROM concepts c WHERE ${conditions.join(' AND ')} ORDER BY c.title`,
+      params
     );
   },
 
@@ -381,6 +414,17 @@ export const FlashcardRepository = {
 };
 
 // ==================== Study Session Repository ====================
+
+/**
+ * Local calendar date of a UTC ISO timestamp stored in SQLite.
+ * SQLite's `date(start_time)` returns the UTC day; we must bucket by the
+ * user's LOCAL day, otherwise stats/streak flip at 03:00 in Brazil (-03:00).
+ */
+function localDayOf(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : getLocalDateStr(d);
+}
+
 export const StudySessionRepository = {
   getAll(limit?: number): StudySession[] {
     const db = getDatabase();
@@ -400,26 +444,30 @@ export const StudySessionRepository = {
 
   getByDateRange(startDate: string, endDate: string): StudySession[] {
     const db = getDatabase();
+    // Bound by UTC instants derived from LOCAL calendar days so the range
+    // matches what the user sees on screen (not shifted by timezone).
     return db.getAllSync<StudySession>(
-      'SELECT * FROM study_sessions WHERE date(start_time) >= date(?) AND date(start_time) <= date(?) ORDER BY start_time DESC',
-      [startDate, endDate]
+      'SELECT * FROM study_sessions WHERE start_time >= ? AND start_time <= ? ORDER BY start_time DESC',
+      [localDateToUtcIsoStart(startDate), localDateToUtcIsoEnd(endDate)]
     );
   },
 
   getTodayBySubject(subjectId?: string): StudySession[] {
     const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0];
-    
+    const today = getTodayLocal();
+    const dayStart = localDateToUtcIsoStart(today);
+    const dayEnd = localDateToUtcIsoEnd(today);
+
     if (subjectId) {
       return db.getAllSync<StudySession>(
-        'SELECT * FROM study_sessions WHERE subject_id = ? AND date(start_time) = ? ORDER BY start_time DESC',
-        [subjectId, today]
+        'SELECT * FROM study_sessions WHERE subject_id = ? AND start_time >= ? AND start_time <= ? ORDER BY start_time DESC',
+        [subjectId, dayStart, dayEnd]
       );
     }
-    
+
     return db.getAllSync<StudySession>(
-      'SELECT * FROM study_sessions WHERE date(start_time) = ? ORDER BY start_time DESC',
-      [today]
+      'SELECT * FROM study_sessions WHERE start_time >= ? AND start_time <= ? ORDER BY start_time DESC',
+      [dayStart, dayEnd]
     );
   },
 
@@ -429,7 +477,7 @@ export const StudySessionRepository = {
     startDate.setDate(startDate.getDate() - days);
     
     const result = db.getFirstSync<{ total: number }>(
-      'SELECT COALESCE(SUM(duration_seconds), 0) as total FROM study_sessions WHERE date(start_time) >= date(?)',
+      'SELECT COALESCE(SUM(duration_seconds), 0) as total FROM study_sessions WHERE start_time >= ?',
       [startDate.toISOString()]
     );
     return result?.total ?? 0;
@@ -471,33 +519,37 @@ export const StudySessionRepository = {
   getDailyStats(days: number): { date: string; duration_minutes: number }[] {
     const db = getDatabase();
     const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
     startDate.setDate(startDate.getDate() - days + 1);
-    
-    const results = db.getAllSync<{ date: string; duration_minutes: number }>(
-      `SELECT 
-        date(start_time) as date,
-        ROUND(COALESCE(SUM(duration_seconds), 0) / 60.0, 0) as duration_minutes
-       FROM study_sessions 
-       WHERE date(start_time) >= date(?)
-       GROUP BY date(start_time)
-       ORDER BY date ASC`,
+
+    // Fetch raw sessions in range and bucket by LOCAL calendar day.
+    // (SQLite's date(start_time) buckets by UTC day -> wrong for non-UTC users.)
+    const rows = db.getAllSync<{ start_time: string; duration_seconds: number }>(
+      'SELECT start_time, duration_seconds FROM study_sessions WHERE start_time >= ?',
       [startDate.toISOString()]
     );
-    
-    // Fill in missing days with 0
+
+    const totalsByDay = new Map<string, number>();
+    for (const row of rows) {
+      const day = localDayOf(row.start_time);
+      if (!day) continue;
+      totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + (row.duration_seconds || 0));
+    }
+
+    // Fill every day in the window with 0 when missing
     const dailyData: { date: string; duration_minutes: number }[] = [];
     for (let i = 0; i < days; i++) {
       const date = new Date();
+      date.setHours(0, 0, 0, 0);
       date.setDate(date.getDate() - (days - 1 - i));
-      const dateStr = date.toISOString().split('T')[0];
-      
-      const existing = results.find(r => r.date === dateStr);
+      const dateStr = getLocalDateStr(date);
+
       dailyData.push({
         date: dateStr,
-        duration_minutes: existing?.duration_minutes ?? 0,
+        duration_minutes: Math.round((totalsByDay.get(dateStr) ?? 0) / 60),
       });
     }
-    
+
     return dailyData;
   },
 
@@ -513,7 +565,7 @@ export const StudySessionRepository = {
         ROUND(COALESCE(SUM(ss.duration_seconds), 0) / 60.0, 0) as duration_minutes
        FROM study_sessions ss
        LEFT JOIN subjects s ON ss.subject_id = s.id
-       WHERE date(ss.start_time) >= date(?)
+       WHERE ss.start_time >= ?
        GROUP BY ss.subject_id
        ORDER BY duration_minutes DESC`,
       [startDate.toISOString()]
@@ -522,79 +574,38 @@ export const StudySessionRepository = {
 
   getCurrentStreak(): number {
     const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Check if there's a session today
-    const todaySession = db.getFirstSync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM study_sessions WHERE date(start_time) = ?',
-      [today]
+
+    // Single query over the last ~365 days, then bucket by LOCAL calendar day.
+    const since = new Date();
+    since.setDate(since.getDate() - 365);
+    since.setHours(0, 0, 0, 0);
+
+    const rows = db.getAllSync<{ start_time: string }>(
+      'SELECT start_time FROM study_sessions WHERE start_time >= ?',
+      [since.toISOString()]
     );
-    
-    if (!todaySession || todaySession.count === 0) {
-      // No session today, check streak ending yesterday
-      const result = db.getFirstSync<{ streak: number }>(`
-        WITH consecutive_days AS (
-          SELECT 
-            date(start_time) as study_date,
-            julianday(date(start_time)) - julianday(
-              (SELECT MAX(date(start_time)) FROM study_sessions WHERE date(start_time) < date(?))
-            ) as day_diff
-          FROM study_sessions
-          WHERE date(start_time) <= date(?)
-        )
-        SELECT COUNT(*) as streak
-        FROM (
-          SELECT study_date
-          FROM consecutive_days
-          WHERE day_diff <= 1
-          ORDER BY study_date DESC
-          LIMIT 365
-        )
-      `, [today, today]);
-      
-      return result?.streak ?? 0;
+
+    const studiedDays = new Set<string>();
+    for (const row of rows) {
+      const day = localDayOf(row.start_time);
+      if (day) studiedDays.add(day);
     }
-    
-    // Count consecutive days including today
-    const result = db.getFirstSync<{ streak: number }>(`
-      WITH RECURSIVE dates AS (
-        SELECT DISTINCT date(start_time) as study_date FROM study_sessions
-      ),
-      consecutive AS (
-        SELECT 
-          study_date,
-          julianday(?) - julianday(study_date) as days_ago
-        FROM dates
-        WHERE days_ago >= 0 AND days_ago <= 365
-      )
-      SELECT COUNT(*) as streak
-      FROM consecutive c1
-      WHERE NOT EXISTS (
-        SELECT 1 FROM consecutive c2 
-        WHERE c2.days_ago = c1.days_ago - 1
-      ) OR c1.days_ago = 0
-    `, [today]);
-    
-    // Simplified approach: count consecutive days from today backwards
+
+    // Streak counts backwards from today; a session is not required on the
+    // current day yet (grace period until the day ends).
     let streak = 0;
-    for (let i = 0; i < 365; i++) {
-      const checkDate = new Date();
-      checkDate.setDate(checkDate.getDate() - i);
-      const dateStr = checkDate.toISOString().split('T')[0];
-      
-      const hasSession = db.getFirstSync<{ count: number }>(
-        'SELECT COUNT(*) as count FROM study_sessions WHERE date(start_time) = ?',
-        [dateStr]
-      );
-      
-      if (hasSession && hasSession.count > 0) {
-        streak++;
-      } else if (i > 0) {
-        // Break if we find a gap (but allow no session on current day being checked)
-        break;
-      }
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+
+    if (!studiedDays.has(getLocalDateStr(cursor))) {
+      cursor.setDate(cursor.getDate() - 1);
     }
-    
+
+    while (studiedDays.has(getLocalDateStr(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
     return streak;
   },
 };

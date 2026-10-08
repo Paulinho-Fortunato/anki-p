@@ -10,8 +10,7 @@
       "@db/*": ["./src/db/*"],
       "@services/*": ["./src/services/*"],
       "@theme/*": ["./src/theme/*"],
-      "@hooks/*": ["./src/hooks/*"],
-      "@features/*": ["./src/features/*"]
+      "@utils/*": ["./src/utils/*"]
     },
     "types": ["jest", "node"],
     "jsx": "react-native",

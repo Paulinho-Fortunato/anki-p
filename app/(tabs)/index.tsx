@@ -11,9 +11,17 @@ import { initializeDatabase, SubjectRepository, StudySessionRepository } from '@
 import { getDueConcepts, getReviewStats } from '@services/srsService';
 import { router } from 'expo-router';
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 export default function HomeScreen() {
   const { colors } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+  const [greeting] = useState(getGreeting());
   const [stats, setStats] = useState({
     totalSubjects: 0,
     studyTimeToday: 0,
@@ -37,7 +45,7 @@ export default function HomeScreen() {
       // Get weekly stats for chart
       const dailyStats = StudySessionRepository.getDailyStats(7);
       const chartData = dailyStats.map(day => ({
-        label: new Date(day.date).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3),
+        label: new Date(`${day.date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short' }).slice(0, 3),
         value: day.duration_minutes,
       }));
       setWeeklyData(chartData);
@@ -69,7 +77,7 @@ export default function HomeScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.greeting, { color: colors.textSecondary }]}>Bom dia</Text>
+        <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting}</Text>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Vamos estudar hoje?</Text>
       </View>
 
@@ -133,7 +141,7 @@ export default function HomeScreen() {
           </View>
           <Button 
             title="Revisar agora" 
-            onPress={() => {}} 
+            onPress={() => router.push('/(tabs)/revisoes')} 
             variant="primary"
             size="small"
           />
@@ -148,15 +156,15 @@ export default function HomeScreen() {
           title="Nenhuma atividade planejada"
           description="Adicione disciplinas e conceitos para começar a organizar seus estudos"
           action={
-            <Button title="Adicionar disciplina" onPress={() => {}} variant="secondary" />
+            <Button title="Adicionar disciplina" onPress={() => router.push('/modal/subject')} variant="secondary" />
           }
         />
       </Card>
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <Button title="Novo Conceito" onPress={() => {}} variant="primary" style={styles.quickAction} />
-        <Button title="Timer" onPress={() => {}} variant="secondary" style={styles.quickAction} />
+        <Button title="Novo Conceito" onPress={() => router.push('/conceitos')} variant="primary" style={styles.quickAction} />
+        <Button title="Timer" onPress={() => router.push('/(tabs)/estudar')} variant="secondary" style={styles.quickAction} />
       </View>
     </ScrollView>
   );
