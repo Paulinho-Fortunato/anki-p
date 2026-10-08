@@ -23,26 +23,27 @@ export default function Timer({ subjectId, topicId, onSessionComplete }: TimerPr
 
   useEffect(() => {
     TimerService.setContext(subjectId, topicId);
-    
+
     const unsubscribe = TimerService.on({
-      onTick: (remaining: number) => {
+      onTick: (_remaining: number) => {
         setState(TimerService.getState());
       },
       onComplete: () => {
-        setState(TimerService.getState());
-        if (state.mode === 'work' && onSessionComplete) {
+        // Read the freshest state from the service instead of the stale
+        // `state` captured in this effect's closure at mount time.
+        const latest = TimerService.getState();
+        setState(latest);
+        if (latest.mode === 'work' && onSessionComplete) {
           onSessionComplete();
         }
       },
-      onModeChange: (mode: TimerMode) => {
+      onModeChange: (_mode: TimerMode) => {
         setState(TimerService.getState());
       },
     });
 
-    return () => {
-      // Cleanup if needed
-    };
-  }, [subjectId, topicId]);
+    return unsubscribe;
+  }, [subjectId, topicId, onSessionComplete]);
 
   const handleStart = useCallback(() => {
     TimerService.start();

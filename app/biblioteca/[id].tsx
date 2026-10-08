@@ -12,7 +12,7 @@ export default function SubjectDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   
-  const [topics, setTopics] = useState(TopicRepository.getAll(id));
+  const [topics, setTopics] = useState<ReturnType<typeof TopicRepository.getAll>>([]);
 
   useEffect(() => {
     refreshData();
