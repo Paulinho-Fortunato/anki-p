@@ -17,6 +17,7 @@
     "expo-asset": "~11.0.5",
     "expo-audio": "~0.3.5",
     "expo-constants": "~17.0.2",
+    "expo-document-picker": "~13.0.3",
     "expo-file-system": "~18.0.3",
     "expo-font": "~13.0.2",
     "expo-haptics": "~14.0.0",

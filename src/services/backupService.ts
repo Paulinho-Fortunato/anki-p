@@ -6,17 +6,6 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { getDatabase } from '@db/schema';
-import {
-  SubjectRepository,
-  TopicRepository,
-  ConceptRepository,
-  FlashcardRepository,
-  StudySessionRepository,
-  ReviewRepository,
-  FeynmanNoteRepository,
-  ConnectionRepository,
-  ReminderRepository,
-} from '@db/repositories';
 
 export interface BackupData {
   version: number;
@@ -244,9 +233,9 @@ class BackupServiceClass {
       }
     } catch (error) {
       console.error('Import failed:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Falha ao importar dados' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Falha ao importar dados'
       };
     }
   }
@@ -257,7 +246,7 @@ class BackupServiceClass {
         encoding: FileSystem.EncodingType.UTF8,
       });
       return this.importData(jsonString);
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Não foi possível ler o arquivo de backup' };
     }
   }
@@ -288,14 +277,14 @@ class BackupServiceClass {
     try {
       await this.ensureBackupDir();
       const files = await FileSystem.readDirectoryAsync(BACKUP_DIR);
-      
+
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
       for (const filename of files) {
         const filepath = `${BACKUP_DIR}${filename}`;
         const info = await FileSystem.getInfoAsync(filepath);
-        
+
         if ((info as any).modificationTime && (info as any).modificationTime < cutoffDate) {
           await FileSystem.deleteAsync(filepath);
         }

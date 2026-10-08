@@ -5,7 +5,7 @@
  */
 
 import { ConceptRepository, FlashcardRepository, ReviewRepository } from '../db/repositories';
-import { getSRSSettings, DEFAULT_SRS_SETTINGS, type SRSSettings, type SRSIntervals } from '../store/settingsStore';
+import { getSRSSettings, type SRSIntervals } from '../store/settingsStore';
 
 // Rating scale (1-4)
 export const RATING = {
@@ -205,18 +205,19 @@ export function processFlashcardReview(
 export function getDueConcepts(limit?: number): any[] {
   const db = require('@db/schema').getDatabase();
   const now = new Date().toISOString();
-  
+
   let query = `
     SELECT c.* FROM concepts c
     WHERE c.next_review_at IS NULL OR c.next_review_at <= ?
     ORDER BY c.next_review_at ASC, c.created_at ASC
   `;
-  
-  if (limit) {
-    query += ` LIMIT ${limit}`;
+  const params: (string | number)[] = [now];
+  if (limit !== undefined) {
+    query += ' LIMIT ?';
+    params.push(Math.max(0, Math.floor(limit)));
   }
-  
-  return db.getAllSync(query, [now]);
+
+  return db.getAllSync(query, params);
 }
 
 /**
@@ -225,18 +226,19 @@ export function getDueConcepts(limit?: number): any[] {
 export function getDueFlashcards(limit?: number): any[] {
   const db = require('@db/schema').getDatabase();
   const now = new Date().toISOString();
-  
+
   let query = `
     SELECT f.* FROM flashcards f
     WHERE f.next_review_at IS NULL OR f.next_review_at <= ?
     ORDER BY f.next_review_at ASC, f.created_at ASC
   `;
-  
-  if (limit) {
-    query += ` LIMIT ${limit}`;
+  const params: (string | number)[] = [now];
+  if (limit !== undefined) {
+    query += ' LIMIT ?';
+    params.push(Math.max(0, Math.floor(limit)));
   }
-  
-  return db.getAllSync(query, [now]);
+
+  return db.getAllSync(query, params);
 }
 
 /**

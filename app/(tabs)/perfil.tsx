@@ -1,11 +1,37 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { useTheme } from '@theme/ThemeProvider';
 import { typography, spacing, borderRadius, shadows, accentColorOptions } from '@theme/tokens';
 import { Palette, Moon, Sun, Monitor, ChevronRight, Database, Info } from 'lucide-react-native';
+import { BackupService } from '@services/backupService';
 
 export default function PerfilScreen() {
   const { colors, colorScheme, themeMode, setColorScheme, accentColor, setAccentColor } = useTheme();
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  const handleExport = async () => {
+    setBackupBusy(true);
+    const filepath = await BackupService.exportToFile();
+    setBackupBusy(false);
+    Alert.alert(
+      filepath ? 'Backup exportado' : 'Exportação falhou',
+      filepath ? 'O ficheiro foi criado e está pronto para partilhar.' : 'Não foi possível criar o backup.'
+    );
+  };
+
+  const handleImport = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    setBackupBusy(true);
+    const importResult = await BackupService.importFromFile(result.assets[0].uri);
+    setBackupBusy(false);
+    Alert.alert(
+      importResult.success ? 'Backup importado' : 'Importação falhou',
+      importResult.success ? 'Os seus dados foram restaurados.' : importResult.error || 'O ficheiro não é válido.'
+    );
+  };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -97,7 +123,13 @@ export default function PerfilScreen() {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Dados</Text>
 
-        <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
+        <TouchableOpacity
+          style={[styles.settingItem, { borderBottomColor: colors.borderSubtle, opacity: backupBusy ? 0.5 : 1 }]}
+          onPress={handleExport}
+          disabled={backupBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Exportar dados"
+        >
           <View style={styles.settingLeft}>
             <Database size={22} color={colors.textPrimary} strokeWidth={2} />
             <View style={styles.settingInfo}>
@@ -110,7 +142,13 @@ export default function PerfilScreen() {
           <ChevronRight size={20} color={colors.textTertiary} strokeWidth={2} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
+        <TouchableOpacity
+          style={[styles.settingItem, { borderBottomColor: colors.borderSubtle, opacity: backupBusy ? 0.5 : 1 }]}
+          onPress={handleImport}
+          disabled={backupBusy}
+          accessibilityRole="button"
+          accessibilityLabel="Importar dados"
+        >
           <View style={styles.settingLeft}>
             <Database size={22} color={colors.textPrimary} strokeWidth={2} />
             <View style={styles.settingInfo}>
