@@ -3,6 +3,7 @@
  * All scheduling is local, no external services required
  */
 
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { ReminderRepository } from '@db/repositories';
 
@@ -30,30 +31,73 @@ class NotificationServiceClass {
     if (this.initialized) return;
 
     try {
-      // Set up notification handler
+      // Set up notification handler (expo-notifications SDK 52 API:
+      // setNotificationHandler is synchronous and NotificationBehavior
+      // includes the iOS 15+ banner/list flags).
       Notifications.setNotificationHandler({
-        handleNotification: async (notification) => {
-          console.log('Notification received:', notification);
-          return {
-            shouldShowAlert: this.config.enabled,
-            shouldPlaySound: this.config.sound,
-            shouldSetBadge: true,
-          };
-        },
+        handleNotification: async () => ({
+          shouldShowAlert: this.config.enabled,
+          shouldShowBanner: this.config.enabled,
+          shouldShowList: this.config.enabled,
+          shouldPlaySound: this.config.sound,
+          shouldSetBadge: true,
+        }),
       });
 
       // Request permissions
       const { status } = await Notifications.requestPermissionsAsync();
-      
+
       if (status !== 'granted') {
         console.warn('Notification permissions not granted');
         this.config.enabled = false;
+      }
+
+      // Android O+ requires notification channels to exist before
+      // scheduling; otherwise notifications sent with a `channelId` are
+      // silently dropped. Create the channels used by this service.
+      if (Platform.OS === 'android') {
+        await this.ensureAndroidChannels();
       }
 
       this.initialized = true;
     } catch (error) {
       console.error('Failed to initialize notifications:', error);
       this.config.enabled = false;
+    }
+  }
+
+  private async ensureAndroidChannels(): Promise<void> {
+    const channelConfigs: Array<{ id: string; name: string; description: string }> = [
+      {
+        id: NOTIFICATION_CATEGORIES.STUDY_REMINDER,
+        name: 'Lembretes de estudo',
+        description: 'Notificações de lembretes para estudar',
+      },
+      {
+        id: NOTIFICATION_CATEGORIES.REVIEW_REMINDER,
+        name: 'Lembretes de revisão',
+        description: 'Notificações de revisões agendadas (SRS)',
+      },
+      {
+        id: NOTIFICATION_CATEGORIES.BREAK_REMINDER,
+        name: 'Lembretes de pausa',
+        description: 'Notificações de fim de sessão/pausa do timer',
+      },
+    ];
+
+    for (const channel of channelConfigs) {
+      try {
+        await Notifications.setNotificationChannelAsync(channel.id, {
+          name: channel.name,
+          description: channel.description,
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: this.config.vibration ? [0, 250, 250, 250] : null,
+          lightColor: '#6C5CE4',
+          sound: this.config.sound ? 'default' : null,
+        });
+      } catch (error) {
+        console.error(`Failed to create notification channel ${channel.id}:`, error);
+      }
     }
   }
 
