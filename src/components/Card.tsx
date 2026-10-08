@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '@theme/ThemeProvider';
 import { borderRadius, shadows, spacing } from '@theme/tokens';
 
@@ -38,13 +38,15 @@ export function Card({
 
   if (onPress) {
     return (
-      <View
+      <Pressable
         style={cardStyles}
+        onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint="Toque para abrir"
       >
         {children}
-      </View>
+      </Pressable>
     );
   }
 

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useTheme } from '@theme/ThemeProvider';
-import { typography, spacing, borderRadius, shadows } from '@theme/tokens';
-import { Settings, Bell, Palette, Moon, Sun, Monitor, ChevronRight, Database, Info } from 'lucide-react-native';
+import { typography, spacing, borderRadius, shadows, accentColorOptions } from '@theme/tokens';
+import { Palette, Moon, Sun, Monitor, ChevronRight, Database, Info } from 'lucide-react-native';
 
 export default function PerfilScreen() {
   const { colors, colorScheme, themeMode, setColorScheme, accentColor, setAccentColor } = useTheme();
@@ -30,8 +30,8 @@ export default function PerfilScreen() {
       {/* Appearance Section */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Aparência</Text>
-        
-        <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
+
+        <View style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
           <View style={styles.settingLeft}>
             {colorScheme === 'dark' ? (
               <Moon size={22} color={colors.textPrimary} strokeWidth={2} />
@@ -46,26 +46,26 @@ export default function PerfilScreen() {
             </View>
           </View>
           <View style={styles.themeSelector}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setColorScheme('light')}
               style={[styles.themeOption, { backgroundColor: '#F5F5F7', opacity: colorScheme === 'light' ? 1 : 0.5 }]}
             >
               <Sun size={16} color="#1D1D1F" />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setColorScheme('dark')}
               style={[styles.themeOption, { backgroundColor: '#1C1C1E', opacity: colorScheme === 'dark' ? 1 : 0.5 }]}
             >
               <Moon size={16} color="#F5F5F7" />
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setColorScheme('auto')}
               style={[styles.themeOption, { backgroundColor: '#8E8E93', opacity: themeMode === 'auto' ? 1 : 0.5 }]}
             >
               <Monitor size={16} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
           <View style={styles.settingLeft}>
@@ -79,12 +79,24 @@ export default function PerfilScreen() {
           </View>
           <View style={[styles.colorDot, { backgroundColor: accentColor }]} />
         </TouchableOpacity>
+        <View style={styles.colorOptions} accessibilityLabel="Cores de destaque">
+          {accentColorOptions.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              onPress={() => setAccentColor(option.value)}
+              style={[styles.colorOption, { backgroundColor: option.value, opacity: accentColor === option.value ? 1 : 0.45 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Usar cor ${option.name}`}
+              accessibilityState={{ selected: accentColor === option.value }}
+            />
+          ))}
+        </View>
       </View>
 
       {/* Data Section */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Dados</Text>
-        
+
         <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
           <View style={styles.settingLeft}>
             <Database size={22} color={colors.textPrimary} strokeWidth={2} />
@@ -115,7 +127,7 @@ export default function PerfilScreen() {
       {/* Info Section */}
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Sobre</Text>
-        
+
         <TouchableOpacity style={[styles.settingItem, { borderBottomColor: colors.borderSubtle }]}>
           <View style={styles.settingLeft}>
             <Info size={22} color={colors.textPrimary} strokeWidth={2} />
@@ -133,7 +145,7 @@ export default function PerfilScreen() {
             Privacidade e Dados Locais
           </Text>
           <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-            Todos os seus dados são armazenados apenas neste dispositivo. Não há conta, servidores ou sincronização na nuvem. 
+            Todos os seus dados são armazenados apenas neste dispositivo. Não há conta, servidores ou sincronização na nuvem.
             {'\n\n'}
             ⚠️ Desinstalar o aplicativo pode apagar todos os seus dados. Faça backups regularmente.
           </Text>
@@ -242,6 +254,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFFFFF',
     ...shadows.sm,
+  },
+  colorOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingLeft: 52,
+  },
+  colorOption: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   infoCard: {
     padding: spacing.lg,

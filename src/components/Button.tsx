@@ -47,6 +47,8 @@ export function Button({
   const buttonStyles = [
     styles.base,
     styles[variant],
+    { backgroundColor: getBackgroundColor(variant, colors) },
+    variant === 'secondary' && { borderColor: colors.accent },
     styles[`${size}Size`],
     fullWidth && styles.fullWidth,
     disabled && styles.disabled,
@@ -56,6 +58,7 @@ export function Button({
   const textStyles = [
     styles.text,
     styles[`${variant}Text`],
+    { color: getTextColor(variant, colors) },
     styles[`${size}Text`],
     disabled && styles.disabledText,
     textStyle,
@@ -73,7 +76,7 @@ export function Button({
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       {loading ? (
-        <ActivityIndicator color={getTextColor(variant)} />
+        <ActivityIndicator color={getTextColor(variant, colors)} />
       ) : (
         <>
           {icon && <>{icon}</>}
@@ -84,18 +87,29 @@ export function Button({
   );
 }
 
-function getTextColor(variant: string): string {
+function getBackgroundColor(variant: string, colors: ReturnType<typeof useTheme>['colors']): string {
+  switch (variant) {
+    case 'primary':
+      return colors.accent;
+    case 'danger':
+      return colors.error;
+    default:
+      return 'transparent';
+  }
+}
+
+function getTextColor(variant: string, colors: ReturnType<typeof useTheme>['colors']): string {
   switch (variant) {
     case 'primary':
       return '#FFFFFF';
     case 'secondary':
-      return '#007AFF';
+      return colors.accent;
     case 'tertiary':
-      return '#007AFF';
+      return colors.accent;
     case 'danger':
       return '#FFFFFF';
     default:
-      return '#007AFF';
+      return colors.accent;
   }
 }
 
@@ -113,7 +127,6 @@ const styles = StyleSheet.create({
   secondary: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: '#007AFF',
   },
   tertiary: {
     backgroundColor: 'transparent',
