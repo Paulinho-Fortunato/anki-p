@@ -9,11 +9,11 @@ import { X, Save } from 'lucide-react-native';
 
 export default function SubjectModal() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id: rawId } = useLocalSearchParams<{ id?: string | string[] }>();
   const { colors } = useTheme();
-  
-  const isEditing = !!id;
-  const existingSubject = isEditing ? SubjectRepository.getById(id!) : null;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const isEditing = Boolean(id);
+  const existingSubject = getSubjectSafely(id);
 
   const [name, setName] = useState(existingSubject?.name || '');
   const [selectedColor, setSelectedColor] = useState(existingSubject?.color || colors.accent);
@@ -35,13 +35,17 @@ export default function SubjectModal() {
       return;
     }
 
-    if (isEditing && existingSubject) {
-      SubjectRepository.update(existingSubject.id, { name: name.trim(), color: selectedColor });
-    } else {
-      SubjectRepository.create(name.trim(), selectedColor);
+    try {
+      if (isEditing && existingSubject) {
+        SubjectRepository.update(existingSubject.id, { name: name.trim(), color: selectedColor });
+      } else {
+        SubjectRepository.create(name.trim(), selectedColor);
+      }
+      router.back();
+    } catch (error) {
+      console.error('Subject save failed:', error);
+      Alert.alert('Não foi possível guardar', 'Verifique os dados e tente novamente.');
     }
-
-    router.back();
   };
 
   const handleDelete = () => {
@@ -142,6 +146,16 @@ export default function SubjectModal() {
       </ScrollView>
     </View>
   );
+}
+
+function getSubjectSafely(id?: string) {
+  if (!id) return null;
+  try {
+    return SubjectRepository.getById(id);
+  } catch (error) {
+    console.error('Subject load failed:', error);
+    return null;
+  }
 }
 
 const styles = StyleSheet.create({

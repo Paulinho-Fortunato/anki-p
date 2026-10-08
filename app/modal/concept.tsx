@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@theme/ThemeProvider';
-import { typography, spacing, borderRadius, shadows } from '@theme/tokens';
+import { typography, spacing, borderRadius } from '@theme/tokens';
 import { Button } from '@components';
 import { ConceptRepository } from '@db/repositories';
-import { X, Save, BookOpen } from 'lucide-react-native';
+import { X, Save } from 'lucide-react-native';
 
 export default function ConceptModal() {
   const router = useRouter();
-  const { id, topicId } = useLocalSearchParams<{ id?: string; topicId: string }>();
+  const { id: rawId, topicId: rawTopicId } = useLocalSearchParams<{ id?: string | string[]; topicId?: string | string[] }>();
   const { colors } = useTheme();
-  
-  const isEditing = !!id;
-  const existingConcept = isEditing ? ConceptRepository.getById(id!) : null;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const topicId = Array.isArray(rawTopicId) ? rawTopicId[0] : rawTopicId;
+  const isEditing = Boolean(id);
+  const existingConcept = getConceptSafely(id);
 
   const [title, setTitle] = useState(existingConcept?.title || '');
   const [explanation, setExplanation] = useState(existingConcept?.explanation || '');
@@ -33,24 +34,28 @@ export default function ConceptModal() {
       return;
     }
 
-    if (isEditing && existingConcept) {
-      ConceptRepository.update(existingConcept.id, {
-        title: title.trim(),
-        explanation: explanation.trim() || undefined,
-        question: question.trim() || undefined,
-        answer: answer.trim() || undefined,
-        notes: notes.trim() || undefined,
-      });
-    } else {
-      ConceptRepository.create(targetTopicId, title.trim(), {
-        explanation: explanation.trim() || undefined,
-        question: question.trim() || undefined,
-        answer: answer.trim() || undefined,
-        notes: notes.trim() || undefined,
-      });
+    try {
+      if (isEditing && existingConcept) {
+        ConceptRepository.update(existingConcept.id, {
+          title: title.trim(),
+          explanation: explanation.trim() || undefined,
+          question: question.trim() || undefined,
+          answer: answer.trim() || undefined,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        ConceptRepository.create(targetTopicId, title.trim(), {
+          explanation: explanation.trim() || undefined,
+          question: question.trim() || undefined,
+          answer: answer.trim() || undefined,
+          notes: notes.trim() || undefined,
+        });
+      }
+      router.back();
+    } catch (error) {
+      console.error('Concept save failed:', error);
+      Alert.alert('Não foi possível guardar', 'Verifique os dados e tente novamente.');
     }
-
-    router.back();
   };
 
   const handleDelete = () => {
@@ -219,6 +224,16 @@ export default function ConceptModal() {
       </ScrollView>
     </View>
   );
+}
+
+function getConceptSafely(id?: string) {
+  if (!id) return null;
+  try {
+    return ConceptRepository.getById(id);
+  } catch (error) {
+    console.error('Concept load failed:', error);
+    return null;
+  }
 }
 
 const styles = StyleSheet.create({
